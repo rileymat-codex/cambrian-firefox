@@ -20,7 +20,9 @@ class SocketProcessBackgroundParent final
   mozilla::ipc::IPCResult RecvInitVerifySSLServerCert(
       Endpoint<PVerifySSLServerCertParent>&& aEndpoint,
       nsTArray<ByteArray>&& aPeerCertChain, const nsACString& aHostName,
-      const int32_t& aPort, const OriginAttributes& aOriginAttributes,
+      const int32_t& aPort, const nsACString& aPeerAddress,
+      const nsACString& aOverrideAddress, const bool& aOverrideInsecure,
+      const OriginAttributes& aOriginAttributes,
       const Maybe<ByteArray>& aStapledOCSPResponse,
       const Maybe<ByteArray>& aSctsFromTLSExtension,
       const Maybe<DelegatedCredentialInfoArg>& aDcInfo,

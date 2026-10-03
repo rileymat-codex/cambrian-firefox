@@ -108,6 +108,8 @@
 #include "mozilla/StaticPrefs_security.h"
 #include "mozilla/UniquePtr.h"
 #include "mozilla/glean/SecurityManagerSslMetrics.h"
+#include "mozilla/net/DNS.h"
+#include "mozilla/net/HostOverride.h"
 #include "mozpkix/pkix.h"
 #include "mozpkix/pkixcheck.h"
 #include "mozpkix/pkixnss.h"
@@ -659,7 +661,8 @@ Result AuthCertificate(
 
 PRErrorCode AuthCertificateParseResults(
     uint64_t aPtrForLog, const nsACString& aHostName, int32_t aPort,
-    const OriginAttributes& aOriginAttributes,
+    const nsACString& aPeerAddress, const OriginAttributes& aOriginAttributes,
+    const nsACString& aOverrideAddress, bool aOverrideInsecure,
     const nsCOMPtr<nsIX509Cert>& aCert, mozilla::pkix::Time aTime,
     PRErrorCode aCertVerificationError,
     /* out */
@@ -692,6 +695,11 @@ PRErrorCode AuthCertificateParseResults(
     return aCertVerificationError;
   }
 
+  if (MatchesInsecureHostOverride(aHostName, aPeerAddress, aOverrideAddress,
+                                  aOverrideInsecure)) {
+    return 0;
+  }
+
   nsCOMPtr<nsICertOverrideService> overrideService =
       do_GetService(NS_CERTOVERRIDE_CONTRACTID);
   if (!overrideService) {
@@ -718,6 +726,21 @@ PRErrorCode AuthCertificateParseResults(
   return aCertVerificationError;
 }
 
+bool MatchesInsecureHostOverride(const nsACString& aHostName,
+                                 const nsACString& aPeerAddress,
+                                 const nsACString& aSnapshotAddress,
+                                 bool aSnapshotInsecure) {
+  if (!aSnapshotInsecure || aPeerAddress.IsEmpty() ||
+      aSnapshotAddress.IsEmpty() || !aPeerAddress.Equals(aSnapshotAddress)) {
+    return false;
+  }
+  Maybe<mozilla::net::HostOverride> current =
+      mozilla::net::LookupHostOverride(aHostName);
+  return current.isSome() && current->mInsecure &&
+         current->mAddress.Equals(aSnapshotAddress) &&
+         current->mAddress.Equals(aPeerAddress);
+}
+
 static nsTArray<nsTArray<uint8_t>> CreateCertBytesArray(
     const UniqueSECItemArray& aCertChain) {
   nsTArray<nsTArray<uint8_t>> certsBytes;
@@ -734,7 +757,9 @@ static nsTArray<nsTArray<uint8_t>> CreateCertBytesArray(
 SECStatus SSLServerCertVerificationJob::Dispatch(
     uint64_t addrForLogging, void* aPinArg,
     nsTArray<nsTArray<uint8_t>>&& peerCertChain, const nsACString& aHostName,
-    int32_t aPort, const OriginAttributes& aOriginAttributes,
+    int32_t aPort, const nsACString& aPeerAddress,
+    const nsACString& aOverrideAddress, bool aOverrideInsecure,
+    const OriginAttributes& aOriginAttributes,
     Maybe<nsTArray<uint8_t>>& stapledOCSPResponse,
     Maybe<nsTArray<uint8_t>>& sctsFromTLSExtension,
     Maybe<DelegatedCredentialInfo>& dcInfo, uint32_t providerFlags, Time time,
@@ -755,8 +780,9 @@ SECStatus SSLServerCertVerificationJob::Dispatch(
 
   RefPtr<SSLServerCertVerificationJob> job(new SSLServerCertVerificationJob(
       addrForLogging, aPinArg, std::move(peerCertChain), aHostName, aPort,
-      aOriginAttributes, stapledOCSPResponse, sctsFromTLSExtension, dcInfo,
-      providerFlags, time, certVerifierFlags, aResultTask));
+      aPeerAddress, aOverrideAddress, aOverrideInsecure, aOriginAttributes,
+      stapledOCSPResponse, sctsFromTLSExtension, dcInfo, providerFlags, time,
+      certVerifierFlags, aResultTask));
 
   nsresult nrv = gCertVerificationThreadPool->Dispatch(job, NS_DISPATCH_NORMAL);
   if (NS_FAILED(nrv)) {
@@ -835,7 +861,8 @@ SSLServerCertVerificationJob::Run() {
       nsITransportSecurityInfo::OverridableErrorCategory::ERROR_UNSET;
   nsCOMPtr<nsIX509Cert> cert(new nsNSSCertificate(std::move(certBytes)));
   PRErrorCode finalError = AuthCertificateParseResults(
-      mAddrForLogging, mHostName, mPort, mOriginAttributes, cert, mTime, error,
+      mAddrForLogging, mHostName, mPort, mPeerAddress, mOriginAttributes,
+      mOverrideAddress, mOverrideInsecure, cert, mTime, error,
       overridableErrorCategory);
 
   // NB: finalError may be 0 here, in which the connection will continue.
@@ -862,7 +889,9 @@ SSLServerCertVerificationJob::Run() {
 //  checks and calls SSLServerCertVerificationJob::Dispatch.
 SECStatus AuthCertificateHookInternal(
     CommonSocketControl* socketControl, const void* aPtrForLogging,
-    const nsACString& hostName, nsTArray<nsTArray<uint8_t>>&& peerCertChain,
+    const nsACString& hostName, const nsACString& aPeerAddress,
+    const nsACString& aOverrideAddress, bool aOverrideInsecure,
+    nsTArray<nsTArray<uint8_t>>&& peerCertChain,
     Maybe<nsTArray<uint8_t>>& stapledOCSPResponse,
     Maybe<nsTArray<uint8_t>>& sctsFromTLSExtension,
     Maybe<DelegatedCredentialInfo>& dcInfo, uint32_t providerFlags,
@@ -905,6 +934,7 @@ SECStatus AuthCertificateHookInternal(
   if (XRE_IsSocketProcess()) {
     return RemoteProcessCertVerification(
         std::move(peerCertChain), hostName, socketControl->GetPort(),
+        aPeerAddress, aOverrideAddress, aOverrideInsecure,
         socketControl->GetOriginAttributes(), stapledOCSPResponse,
         sctsFromTLSExtension, dcInfo, providerFlags, certVerifierFlags,
         resultTask);
@@ -916,7 +946,8 @@ SECStatus AuthCertificateHookInternal(
   // because of the performance benefits of doing so.
   return SSLServerCertVerificationJob::Dispatch(
       addr, socketControl, std::move(peerCertChain), hostName,
-      socketControl->GetPort(), socketControl->GetOriginAttributes(),
+      socketControl->GetPort(), aPeerAddress, aOverrideAddress,
+      aOverrideInsecure, socketControl->GetOriginAttributes(),
       stapledOCSPResponse, sctsFromTLSExtension, dcInfo, providerFlags, Now(),
       certVerifierFlags, resultTask);
 }
@@ -925,6 +956,16 @@ SECStatus AuthCertificateHookInternal(
 // to AuthCertificateHookInternal. AuthCertificateHookInternal will call
 // SSLServerCertVerificationJob::Dispatch. SSLServerCertVerificationJob
 // should never do anything with fd except logging.
+static nsCString GetPeerAddress(PRFileDesc* aFd) {
+  PRNetAddr peerAddr;
+  if (PR_GetPeerName(aFd, &peerAddr) != PR_SUCCESS) {
+    return nsCString();
+  }
+  mozilla::net::NetAddr address;
+  mozilla::net::PRNetAddrToNetAddr(&peerAddr, &address);
+  return address.ToString();
+}
+
 SECStatus AuthCertificateHook(void* arg, PRFileDesc* fd, PRBool checkSig,
                               PRBool isServer) {
   MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
@@ -1022,9 +1063,18 @@ SECStatus AuthCertificateHook(void* arg, PRFileDesc* fd, PRBool checkSig,
   const nsCString echPublicName(channelPreInfo.echPublicName);
   const nsACString& hostname =
       verifyToEchPublicName ? echPublicName : socketInfo->GetHostName();
+  nsCString peerAddress = GetPeerAddress(fd);
+  const auto& hostOverride = socketInfo->GetHostOverride();
+  nsCString overrideAddress;
+  bool overrideInsecure = false;
+  if (hostOverride && !verifyToEchPublicName) {
+    overrideAddress = hostOverride->mAddress;
+    overrideInsecure = hostOverride->mInsecure;
+  }
   socketInfo->SetCertVerificationWaiting();
   rv = AuthCertificateHookInternal(socketInfo, static_cast<const void*>(fd),
-                                   hostname, std::move(peerCertsBytes),
+                                   hostname, peerAddress, overrideAddress,
+                                   overrideInsecure, std::move(peerCertsBytes),
                                    stapledOCSPResponse, sctsFromTLSExtension,
                                    dcInfo, providerFlags, certVerifierFlags);
   return rv;
@@ -1059,10 +1109,10 @@ SECStatus AuthCertificateHookWithInfo(
   // for Delegated Credentials.
   Maybe<DelegatedCredentialInfo> dcInfo;
 
-  return AuthCertificateHookInternal(socketControl, aPtrForLogging, aHostName,
-                                     std::move(peerCertChain),
-                                     stapledOCSPResponse, sctsFromTLSExtension,
-                                     dcInfo, providerFlags, certVerifierFlags);
+  return AuthCertificateHookInternal(
+      socketControl, aPtrForLogging, aHostName, nsCString(), nsCString(), false,
+      std::move(peerCertChain), stapledOCSPResponse, sctsFromTLSExtension,
+      dcInfo, providerFlags, certVerifierFlags);
 }
 
 NS_IMPL_ISUPPORTS_INHERITED0(SSLServerCertVerificationResult, Runnable)

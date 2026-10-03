@@ -45,7 +45,9 @@ class VerifySSLServerCertChild : public PVerifySSLServerCertChild {
 
 SECStatus RemoteProcessCertVerification(
     nsTArray<nsTArray<uint8_t>>&& aPeerCertChain, const nsACString& aHostName,
-    int32_t aPort, const OriginAttributes& aOriginAttributes,
+    int32_t aPort, const nsACString& aPeerAddress,
+    const nsACString& aOverrideAddress, bool aOverrideInsecure,
+    const OriginAttributes& aOriginAttributes,
     Maybe<nsTArray<uint8_t>>& aStapledOCSPResponse,
     Maybe<nsTArray<uint8_t>>& aSctsFromTLSExtension,
     Maybe<DelegatedCredentialInfo>& aDcInfo, uint32_t aProviderFlags,

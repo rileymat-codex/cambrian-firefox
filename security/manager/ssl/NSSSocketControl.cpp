@@ -10,6 +10,7 @@
 #include "mozilla/dom/Promise.h"
 #include "mozilla/glean/NetwerkMetrics.h"
 #include "mozilla/glean/SecurityManagerSslMetrics.h"
+#include "mozilla/net/HostOverride.h"
 #include "nsISocketProvider.h"
 #include "nsNSSCallbacks.h"
 #include "nsNSSComponent.h"
@@ -50,6 +51,7 @@ NSSSocketControl::NSSSocketControl(
       mKEAKeyBits(0),
       mMACAlgorithmUsed(nsITLSSocketControl::SSL_MAC_UNKNOWN),
       mProviderTlsFlags(providerTlsFlags),
+      mHostOverride(mozilla::net::LookupHostOverride(aHostName)),
       mSocketCreationTimestamp(TimeStamp::Now()),
       mPlaintextBytesRead(0),
       mClaimed(!(providerFlags & nsISocketProvider::IS_SPECULATIVE_CONNECTION)),
@@ -675,6 +677,13 @@ NSSSocketControl::GetPeerId(nsACString& aResult) {
   }
 
   mPeerId.AppendPrintf("tlsflags0x%08x:", mProviderTlsFlags);
+
+  if (mHostOverride) {
+    mPeerId.AppendLiteral("hostoverride:");
+    mPeerId.Append(mHostOverride->mInsecure ? "insecure:" : "normal:");
+    mPeerId.Append(mHostOverride->mAddress);
+    mPeerId.Append(':');
+  }
 
   mPeerId.Append(mHostName);
   mPeerId.Append(':');

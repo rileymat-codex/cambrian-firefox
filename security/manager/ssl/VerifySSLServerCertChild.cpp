@@ -75,7 +75,9 @@ ipc::IPCResult VerifySSLServerCertChild::RecvOnVerifySSLServerCertFinished(
 
 SECStatus RemoteProcessCertVerification(
     nsTArray<nsTArray<uint8_t>>&& aPeerCertChain, const nsACString& aHostName,
-    int32_t aPort, const OriginAttributes& aOriginAttributes,
+    int32_t aPort, const nsACString& aPeerAddress,
+    const nsACString& aOverrideAddress, bool aOverrideInsecure,
+    const OriginAttributes& aOriginAttributes,
     Maybe<nsTArray<uint8_t>>& aStapledOCSPResponse,
     Maybe<nsTArray<uint8_t>>& aSctsFromTLSExtension,
     Maybe<DelegatedCredentialInfo>& aDcInfo, uint32_t aProviderFlags,
@@ -122,6 +124,9 @@ SECStatus RemoteProcessCertVerification(
           [endpoint = std::move(parentEndpoint),
            peerCertBytes = std::move(peerCertBytes),
            hostName = std::move(hostName), port(aPort),
+           peerAddress = nsCString(aPeerAddress),
+           overrideAddress = nsCString(aOverrideAddress),
+           overrideInsecure = aOverrideInsecure,
            originAttributes(aOriginAttributes),
            stapledOCSPResponse = std::move(stapledOCSPResponse),
            sctsFromTLSExtension = std::move(sctsFromTLSExtension),
@@ -129,9 +134,10 @@ SECStatus RemoteProcessCertVerification(
            certVerifierFlags(aCertVerifierFlags)](
               net::SocketProcessBackgroundChild* aActor) mutable {
             (void)aActor->SendInitVerifySSLServerCert(
-                std::move(endpoint), peerCertBytes, hostName, port,
-                originAttributes, stapledOCSPResponse, sctsFromTLSExtension,
-                dcInfo, providerFlags, certVerifierFlags);
+                std::move(endpoint), peerCertBytes, hostName, port, peerAddress,
+                overrideAddress, overrideInsecure, originAttributes,
+                stapledOCSPResponse, sctsFromTLSExtension, dcInfo,
+                providerFlags, certVerifierFlags);
           }))) {
     PR_SetError(SEC_ERROR_LIBRARY_FAILURE, 0);
     return SECFailure;

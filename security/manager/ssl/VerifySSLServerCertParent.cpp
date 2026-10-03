@@ -124,7 +124,9 @@ nsresult IPCServerCertVerificationResult::Dispatch(
 
 bool VerifySSLServerCertParent::Dispatch(
     nsTArray<ByteArray>&& aPeerCertChain, const nsACString& aHostName,
-    const int32_t& aPort, const OriginAttributes& aOriginAttributes,
+    const int32_t& aPort, const nsACString& aPeerAddress,
+    const nsACString& aOverrideAddress, bool aOverrideInsecure,
+    const OriginAttributes& aOriginAttributes,
     const Maybe<ByteArray>& aStapledOCSPResponse,
     const Maybe<ByteArray>& aSctsFromTLSExtension,
     const Maybe<DelegatedCredentialInfoArg>& aDcInfo,
@@ -167,15 +169,19 @@ bool VerifySSLServerCertParent::Dispatch(
   nsresult rv = sts->Dispatch(NS_NewRunnableFunction(
       "VerifySSLServerCertParent::Dispatch",
       [peerCertBytes = std::move(peerCertBytes),
-       hostName = nsCString(aHostName), aPort, aOriginAttributes,
+       hostName = nsCString(aHostName), aPort,
+       peerAddress = nsCString(aPeerAddress), aOriginAttributes,
+       overrideAddress = nsCString(aOverrideAddress),
+       overrideInsecure = aOverrideInsecure,
        stapledOCSPResponse = std::move(stapledOCSPResponse),
        sctsFromTLSExtension = std::move(sctsFromTLSExtension),
        dcInfo = std::move(dcInfo), aProviderFlags, aCertVerifierFlags,
        resultTask = std::move(resultTask)]() mutable {
         SECStatus status = SSLServerCertVerificationJob::Dispatch(
-            0, nullptr, std::move(peerCertBytes), hostName, aPort,
-            aOriginAttributes, stapledOCSPResponse, sctsFromTLSExtension,
-            dcInfo, aProviderFlags, Now(), aCertVerifierFlags, resultTask);
+            0, nullptr, std::move(peerCertBytes), hostName, aPort, peerAddress,
+            overrideAddress, overrideInsecure, aOriginAttributes,
+            stapledOCSPResponse, sctsFromTLSExtension, dcInfo, aProviderFlags,
+            Now(), aCertVerifierFlags, resultTask);
         if (status != SECWouldBlock) {
           MOZ_LOG(gPIPNSSLog, LogLevel::Debug,
                   ("VerifySSLServerCertParent::Dispatch - "

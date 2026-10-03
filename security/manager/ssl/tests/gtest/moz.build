@@ -7,6 +7,7 @@ SOURCES += [
     "CoseTest.cpp",
     "DeserializeCertTest.cpp",
     "HMACTest.cpp",
+    "HostOverrideTest.cpp",
     "MD4Test.cpp",
     "NSSBenchTest.cpp",
     "OCSPCacheTest.cpp",
@@ -19,6 +20,7 @@ if CONFIG["NIGHTLY_BUILD"] and not CONFIG["MOZ_NO_SMART_CARDS"]:
     ]
 
 LOCAL_INCLUDES += [
+    "/netwerk/base",
     "/security/certverifier",
     "/security/manager/ssl",
     "/third_party/rust/cose-c/include",

@@ -29,6 +29,11 @@ enum class EVStatus : uint8_t;
 SECStatus AuthCertificateHook(void* arg, PRFileDesc* fd, PRBool checkSig,
                               PRBool isServer);
 
+bool MatchesInsecureHostOverride(const nsACString& aHostName,
+                                 const nsACString& aPeerAddress,
+                                 const nsACString& aSnapshotAddress,
+                                 bool aSnapshotInsecure);
+
 // This function triggers the certificate verification. The verification is
 // asynchronous and the info object will be notified when the verification has
 // completed via SetCertVerificationResult.
@@ -103,6 +108,9 @@ class SSLServerCertVerificationJob : public Runnable {
   static SECStatus Dispatch(uint64_t addrForLogging, void* aPinArg,
                             nsTArray<nsTArray<uint8_t>>&& peerCertChain,
                             const nsACString& aHostName, int32_t aPort,
+                            const nsACString& aPeerAddress,
+                            const nsACString& aOverrideAddress,
+                            bool aOverrideInsecure,
                             const OriginAttributes& aOriginAttributes,
                             Maybe<nsTArray<uint8_t>>& stapledOCSPResponse,
                             Maybe<nsTArray<uint8_t>>& sctsFromTLSExtension,
@@ -118,6 +126,9 @@ class SSLServerCertVerificationJob : public Runnable {
   SSLServerCertVerificationJob(uint64_t addrForLogging, void* aPinArg,
                                nsTArray<nsTArray<uint8_t>>&& peerCertChain,
                                const nsACString& aHostName, int32_t aPort,
+                               const nsACString& aPeerAddress,
+                               const nsACString& aOverrideAddress,
+                               bool aOverrideInsecure,
                                const OriginAttributes& aOriginAttributes,
                                Maybe<nsTArray<uint8_t>>& stapledOCSPResponse,
                                Maybe<nsTArray<uint8_t>>& sctsFromTLSExtension,
@@ -131,6 +142,9 @@ class SSLServerCertVerificationJob : public Runnable {
         mPeerCertChain(std::move(peerCertChain)),
         mHostName(aHostName),
         mPort(aPort),
+        mPeerAddress(aPeerAddress),
+        mOverrideAddress(aOverrideAddress),
+        mOverrideInsecure(aOverrideInsecure),
         mOriginAttributes(aOriginAttributes),
         mProviderFlags(providerFlags),
         mCertVerifierFlags(certVerifierFlags),
@@ -145,6 +159,9 @@ class SSLServerCertVerificationJob : public Runnable {
   nsTArray<nsTArray<uint8_t>> mPeerCertChain;
   nsCString mHostName;
   int32_t mPort;
+  nsCString mPeerAddress;
+  nsCString mOverrideAddress;
+  bool mOverrideInsecure;
   OriginAttributes mOriginAttributes;
   const uint32_t mProviderFlags;
   const uint32_t mCertVerifierFlags;

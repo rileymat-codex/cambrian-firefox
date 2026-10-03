@@ -10,6 +10,7 @@
 #include "TLSClientAuthCertSelection.h"
 #include "mozilla/Casting.h"
 #include "mozilla/Maybe.h"
+#include "mozilla/net/HostOverride.h"
 #include "nsNSSIOLayer.h"
 #include "nsThreadUtils.h"
 
@@ -30,6 +31,11 @@ class NSSSocketControl final : public CommonSocketControl {
 
   nsresult GetFileDescPtr(PRFileDesc** aFilePtr);
   nsresult SetFileDescPtr(PRFileDesc* aFilePtr);
+
+  const mozilla::Maybe<mozilla::net::HostOverride>& GetHostOverride() const {
+    COMMON_SOCKET_CONTROL_ASSERT_ON_OWNING_THREAD();
+    return mHostOverride;
+  }
 
   bool IsHandshakePending() const {
     COMMON_SOCKET_CONTROL_ASSERT_ON_OWNING_THREAD();
@@ -339,6 +345,7 @@ class NSSSocketControl final : public CommonSocketControl {
   int16_t mMACAlgorithmUsed;
 
   uint32_t mProviderTlsFlags;
+  const mozilla::Maybe<mozilla::net::HostOverride> mHostOverride;
   mozilla::TimeStamp mSocketCreationTimestamp;
   uint64_t mPlaintextBytesRead;
 

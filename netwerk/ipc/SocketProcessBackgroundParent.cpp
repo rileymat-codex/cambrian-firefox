@@ -27,7 +27,9 @@ mozilla::ipc::IPCResult
 SocketProcessBackgroundParent::RecvInitVerifySSLServerCert(
     Endpoint<PVerifySSLServerCertParent>&& aEndpoint,
     nsTArray<ByteArray>&& aPeerCertChain, const nsACString& aHostName,
-    const int32_t& aPort, const OriginAttributes& aOriginAttributes,
+    const int32_t& aPort, const nsACString& aPeerAddress,
+    const nsACString& aOverrideAddress, const bool& aOverrideInsecure,
+    const OriginAttributes& aOriginAttributes,
     const Maybe<ByteArray>& aStapledOCSPResponse,
     const Maybe<ByteArray>& aSctsFromTLSExtension,
     const Maybe<DelegatedCredentialInfoArg>& aDcInfo,
@@ -48,6 +50,9 @@ SocketProcessBackgroundParent::RecvInitVerifySSLServerCert(
       [endpoint = std::move(aEndpoint),
        peerCertChain = std::move(aPeerCertChain),
        hostName = nsCString(aHostName), port(aPort),
+       peerAddress = nsCString(aPeerAddress),
+       overrideAddress = nsCString(aOverrideAddress),
+       overrideInsecure = aOverrideInsecure,
        originAttributes(aOriginAttributes),
        stapledOCSPResponse = std::move(aStapledOCSPResponse),
        sctsFromTLSExtension = std::move(aSctsFromTLSExtension),
@@ -59,10 +64,10 @@ SocketProcessBackgroundParent::RecvInitVerifySSLServerCert(
           return;
         }
 
-        parent->Dispatch(std::move(peerCertChain), hostName, port,
-                         originAttributes, stapledOCSPResponse,
-                         sctsFromTLSExtension, dcInfo, providerFlags,
-                         certVerifierFlags);
+        parent->Dispatch(std::move(peerCertChain), hostName, port, peerAddress,
+                         overrideAddress, overrideInsecure, originAttributes,
+                         stapledOCSPResponse, sctsFromTLSExtension, dcInfo,
+                         providerFlags, certVerifierFlags);
       }));
 
   return IPC_OK();
