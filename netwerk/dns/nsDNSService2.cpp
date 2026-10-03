@@ -13,6 +13,7 @@
 #include "mozilla/SyncRunnable.h"
 #include "mozilla/net/ChildDNSService.h"
 #include "mozilla/net/DNSListenerProxy.h"
+#include "mozilla/net/HostOverride.h"
 #include "mozilla/net/NeckoCommon.h"
 #include "nsCRT.h"
 #include "nsCharSeparatedTokenizer.h"
@@ -1141,6 +1142,19 @@ nsresult nsDNSService::CancelAsyncResolveInternal(
 
   res->CancelAsyncRequest(hostname, DNSAdditionalInfo::URL(aInfo), aType,
                           aOriginAttributes, aFlags, af, aListener, aReason);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsDNSService::GetHostOverride(const nsACString& aHostName,
+                              nsACString& aResult) {
+  aResult.Truncate();
+  if (auto hostOverride = LookupHostOverride(aHostName)) {
+    aResult.Assign(hostOverride->mAddress);
+    if (hostOverride->mInsecure) {
+      aResult.AppendLiteral("|insecure");
+    }
+  }
   return NS_OK;
 }
 

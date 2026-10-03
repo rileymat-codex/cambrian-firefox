@@ -113,6 +113,9 @@ interface nsIDNSService : nsISupports
         CONFIRM_DISABLED = 5,
     };
 
+    /** Returns the configured per-host IPv4 override, if any. */
+    AUTF8String getHostOverride(in AUTF8String aHostName);
+
     /**
      * kicks off an asynchronous host lookup.
      *

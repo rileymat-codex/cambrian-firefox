@@ -11,6 +11,7 @@
 #include "mozilla/StaticPtr.h"
 #include "mozilla/SyncRunnable.h"
 #include "mozilla/net/DNSListenerProxy.h"
+#include "mozilla/net/HostOverride.h"
 #include "mozilla/net/NeckoChild.h"
 #include "mozilla/net/TRRServiceParent.h"
 #include "nsDNSPrefetch.h"
@@ -185,6 +186,19 @@ nsresult ChildDNSService::CancelAsyncResolveInternal(
 //-----------------------------------------------------------------------------
 // ChildDNSService::nsIDNSService
 //-----------------------------------------------------------------------------
+
+NS_IMETHODIMP
+ChildDNSService::GetHostOverride(const nsACString& aHostName,
+                                 nsACString& aResult) {
+  aResult.Truncate();
+  if (auto hostOverride = LookupHostOverride(aHostName)) {
+    aResult.Assign(hostOverride->mAddress);
+    if (hostOverride->mInsecure) {
+      aResult.AppendLiteral("|insecure");
+    }
+  }
+  return NS_OK;
+}
 
 NS_IMETHODIMP
 ChildDNSService::AsyncResolve(const nsACString& hostname,

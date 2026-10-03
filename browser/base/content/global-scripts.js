@@ -14,6 +14,10 @@
 // eslint-disable-next-line no-lone-blocks
 {
   Services.scriptloader.loadSubScript("chrome://browser/content/browser.js", this);
+  Services.scriptloader.loadSubScript(
+    "chrome://browser/content/browser-hostOverrideIndicator.js",
+    this
+  );
   Services.scriptloader.loadSubScript("chrome://browser/content/places/browserPlacesViews.js", this);
   Services.scriptloader.loadSubScript("chrome://browser/content/browser-places.js", this);
   Services.scriptloader.loadSubScript("chrome://global/content/globalOverlay.js", this);

@@ -662,6 +662,17 @@ toolbar[inactive="true"] .urlbar,
   max-width: calc(30px + 13em);
 }
 
+#host-override-indicator {
+  max-width: 22em;
+  padding-inline: 4px;
+  font-weight: 600;
+}
+
+#host-override-indicator[insecure] {
+  color: var(--red-60, #d70022);
+  font-weight: 700;
+}
+
 @media (max-width: 770px) {
   #identity-icon-box {
     max-width: 80px;
