@@ -18,6 +18,8 @@ python3 cambrian/tests/host_overrides_browser.py \
   --socket-process off --report /tmp/host-overrides-parent.json
 ```
 
+From an extracted bundle, use `python3 tests/host_overrides_browser.py
+--firefox ./app/firefox --socket-process on --report /tmp/overrides.json`.
 Use the native executable, since the portable launcher intentionally rejects
 profile arguments. The default mapping is `dev-test.invalid=127.0.0.2`; the
 harness edits it during the test. Exit 0 and `passed:true` mean every assertion

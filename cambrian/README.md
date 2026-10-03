@@ -20,6 +20,30 @@ Ubuntu runtime libraries are expected to be available on the host (including
 GTK and related desktop libraries). Other Linux distributions may need their
 equivalent packages.
 
+## Host override prototype
+
+In `about:config`, set the string preference `network.host_overrides`:
+
+```text
+dev-test.invalid=127.0.0.2
+```
+
+For an explicitly trusted development endpoint with an invalid certificate:
+
+```text
+dev-test.invalid=127.0.0.2|insecure
+```
+
+The URL, Host header, TLS SNI, cookies, and origin retain the hostname. Entries
+are comma-separated, IPv4-only, exact hosts, and apply to every port. A blank
+preference removes overrides. Edits abort pooled connections and clear network
+and TLS caches. HSTS and pinning restrictions remain enforced. Proxy,
+WebTransport, HTTP/3 and alternate routing are unsupported for mapped hosts.
+Read [configuration and limitations](docs/host-overrides.md), the
+[source investigation](docs/host-overrides-investigation.md), and
+[validation/change summary](docs/host-overrides-validation.md). The bundled
+`tests/` directory contains reproducible loopback browser tests.
+
 ## Build from source
 
 Use a full Firefox checkout at this repository revision. The workspace's
@@ -27,7 +51,7 @@ sparse packaging worktree contains only `cambrian/`; it is not a build source
 checkout. A reproducible command sequence is:
 
 ```sh
-git clone --branch cambrian-157.0-ubuntu-1 https://github.com/rileymat-codex/cambrian-firefox.git
+git clone --branch feature/host-overrides https://github.com/rileymat-codex/cambrian-firefox.git
 cd cambrian-firefox
 git rev-parse HEAD
 export MOZ_OBJDIR="$HOME/builds/cambrian-firefox-157.0/objdir"

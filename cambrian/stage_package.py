@@ -106,6 +106,15 @@ def main() -> int:
     bundle = staging / "cambrian-firefox"
     (bundle / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     shutil.copy2(source_root / "cambrian" / "README.md", bundle / "README.md")
+    docs = source_root / "cambrian" / "docs"
+    if docs.is_dir():
+        shutil.copytree(docs, bundle / "docs")
+    tests = source_root / "cambrian" / "tests"
+    fixture_files = ("host_overrides_browser.py", "local_server.js", "README.md")
+    if all((tests / name).is_file() for name in fixture_files):
+        (bundle / "tests").mkdir()
+        for name in fixture_files:
+            shutil.copy2(tests / name, bundle / "tests" / name)
     launcher = source_root / "cambrian" / "firefox"
     for name in ("firefox", "cambrian-firefox"):
         target = bundle / name

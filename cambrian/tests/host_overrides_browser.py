@@ -141,7 +141,7 @@ def check_result(check, records, baseline):
     if check["name"].startswith("indicator-"):
         if check["name"] == "indicator-ordinary":
             return result_obj.get("hidden") is True
-        return result_obj.get("hidden") is False and "dev-test.invalid" in result_obj.get("value", "") and "127.0.0.2" in result_obj.get("value", "") and result_obj.get("insecure") == (check["name"] == "indicator-insecure") and (check["name"] != "indicator-insecure" or "TLS bypass" in result_obj["value"])
+        return result_obj.get("hidden") is False and result_obj.get("visible") is True and "dev-test.invalid" in result_obj.get("value", "") and "127.0.0.2" in result_obj.get("value", "") and result_obj.get("insecure") == (check["name"] == "indicator-insecure") and (check["name"] != "indicator-insecure" or "TLS bypass" in result_obj["value"])
     if check["name"] == "dns-records":
         values = check.get("result", [])
         return len(values) == 2 and values[0]["status"] == 0 and values[0]["addresses"] == ["127.0.0.2"] and values[1]["status"] != 0 and not values[1]["addresses"]
@@ -236,7 +236,7 @@ def probe(marionette, url):
 
 def indicator(marionette):
     marionette.command("Marionette:SetContext", {"value": "chrome"})
-    value = content(marionette, "const el = document.getElementById('host-override-indicator'); return el ? {hidden:el.hidden,value:el.value,insecure:el.hasAttribute('insecure')} : null;")
+    value = content(marionette, "const el = document.getElementById('host-override-indicator'); if (!el) return null; const rect = el.getBoundingClientRect(); const style = getComputedStyle(el); return {hidden:el.hidden,value:el.value,insecure:el.hasAttribute('insecure'),visible:rect.width>0 && rect.height>0 && style.display!='none' && style.visibility=='visible'};")
     marionette.command("Marionette:SetContext", {"value": "content"})
     return value
 

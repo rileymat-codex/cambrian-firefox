@@ -1,0 +1,5 @@
+ac_add_options --enable-bootstrap
+ac_add_options --disable-debug
+ac_add_options --disable-debug-symbols
+ac_add_options --disable-updater
+mk_add_options MOZ_OBJDIR=${MOZ_OBJDIR:-$topsrcdir/obj-host-overrides-tests}
