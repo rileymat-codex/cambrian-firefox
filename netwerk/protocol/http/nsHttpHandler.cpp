@@ -44,10 +44,12 @@
 #include "mozilla/glean/NetwerkProtocolHttpMetrics.h"
 #include "mozilla/intl/LocaleService.h"
 #include "mozilla/ipc/URIUtils.h"
+#include "mozilla/net/HostOverride.h"
 #include "mozilla/net/HttpConnectionMgrParent.h"
 #include "mozilla/net/NeckoChild.h"
 #include "mozilla/net/NeckoParent.h"
 #include "mozilla/net/RequestContextService.h"
+#include "mozilla/net/SSLTokensCache.h"
 #include "mozilla/net/SocketProcessChild.h"
 #include "mozilla/net/SocketProcessParent.h"
 #include "mozilla/net/rust_helper.h"
@@ -67,11 +69,14 @@
 #include "nsHttpChannelAuthProvider.h"
 #include "nsHttpConnectionMgr.h"
 #include "nsICookieService.h"
+#include "nsIDNSService.h"
 #include "nsIHttpActivityObserver.h"
 #include "nsINetworkLinkService.h"
 #include "nsIOService.h"
 #include "nsIObserverService.h"
 #include "nsIParentalControlsService.h"
+#include "nsIPrefBranch.h"
+#include "nsIPrefService.h"
 #include "nsISiteIntegrityService.h"
 #include "nsISiteSecurityService.h"
 #include "nsISocketProvider.h"
@@ -530,6 +535,11 @@ nsresult nsHttpHandler::Init() {
 
     // disabled as its a nop right now
     // obsService->AddObserver(this, "net:failed-to-process-uri-content", true);
+  }
+
+  nsCOMPtr<nsIPrefBranch> prefs = do_GetService(NS_PREFSERVICE_CONTRACTID);
+  if (prefs) {
+    prefs->AddObserver("network.host_overrides", this, true);
   }
 
   MakeNewRequestTokenBucket();
@@ -2322,8 +2332,22 @@ nsHttpHandler::Observe(nsISupports* subject, const char* topic,
   LOG(("nsHttpHandler::Observe [topic=\"%s\"]\n", topic));
 
   nsresult rv;
-  if (!strcmp(topic, "profile-change-net-teardown") ||
-      !strcmp(topic, NS_XPCOM_SHUTDOWN_OBSERVER_ID)) {
+  if (!strcmp(topic, NS_PREFBRANCH_PREFCHANGE_TOPIC_ID) && data &&
+      NS_ConvertUTF16toUTF8(data).EqualsLiteral("network.host_overrides")) {
+    if (mConnMgr) {
+      mConnMgr->AbortAndCloseAllConnections(0, nullptr);
+    }
+    if (mAltSvcCache) {
+      mAltSvcCache->ClearAltServiceMappings();
+    }
+    nsCOMPtr<nsIDNSService> dns =
+        do_GetService("@mozilla.org/network/dns-service;1");
+    if (dns) {
+      dns->ClearCache(true);
+    }
+    SSLTokensCache::ClearSessionCacheAndTokens();
+  } else if (!strcmp(topic, "profile-change-net-teardown") ||
+             !strcmp(topic, NS_XPCOM_SHUTDOWN_OBSERVER_ID)) {
     mHandlerActive = false;
 
     // clear cache of all authentication credentials.
@@ -2477,6 +2501,11 @@ nsresult nsHttpHandler::SpeculativeConnectInternal(
     nsIURI* aURI, nsIPrincipal* aPrincipal,
     Maybe<OriginAttributes>&& aOriginAttributes,
     nsIInterfaceRequestor* aCallbacks, bool anonymous) {
+  nsAutoCString speculativeHost;
+  if (NS_SUCCEEDED(aURI->GetAsciiHost(speculativeHost)) &&
+      LookupHostOverride(speculativeHost)) {
+    return NS_OK;
+  }
   if (IsNeckoChild()) {
     nsCOMPtr<nsILoadContext> loadContext = do_GetInterface(aCallbacks);
 
@@ -2612,6 +2641,9 @@ nsresult nsHttpHandler::SpeculativeConnect(nsHttpConnectionInfo* ci,
                                            nsIInterfaceRequestor* callbacks,
                                            uint32_t caps,
                                            SpeculativeTransaction* aTrans) {
+  if (LookupHostOverride(ci->GetOrigin())) {
+    return NS_OK;
+  }
   if (mDebugObservations) {
     nsCOMPtr<nsIObserverService> obsService = services::GetObserverService();
     if (obsService) {

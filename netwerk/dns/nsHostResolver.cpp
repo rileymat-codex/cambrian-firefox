@@ -29,6 +29,7 @@
 #include "mozilla/TimeStamp.h"
 #include "mozilla/glean/NetwerkDnsMetrics.h"
 #include "mozilla/glean/NetwerkMetrics.h"
+#include "mozilla/net/HostOverride.h"
 #include "nsComponentManagerUtils.h"
 #include "nsError.h"
 #include "nsHostResolver.h"
@@ -403,6 +404,29 @@ already_AddRefed<nsHostRecord> nsHostResolver::InitLoopbackRecord(
   return rec.forget();
 }
 
+already_AddRefed<nsHostRecord> nsHostResolver::InitHostOverrideRecord(
+    const nsHostKey& key, const NetAddr& aAddress, nsresult* aRv) {
+  MOZ_ASSERT(aRv);
+  MOZ_ASSERT(IS_ADDR_TYPE(key.type));
+
+  *aRv = NS_ERROR_FAILURE;
+  RefPtr<nsHostRecord> rec = InitRecord(key);
+  nsTArray<NetAddr> addresses;
+  addresses.AppendElement(aAddress);
+  RefPtr<AddrInfo> ai =
+      new AddrInfo(rec->host, DNSResolverType::Native, 0, std::move(addresses));
+  RefPtr<AddrHostRecord> addrRec = do_QueryObject(rec);
+  MutexAutoLock lock(addrRec->addr_info_lock);
+  addrRec->addr_info = ai;
+  addrRec->SetExpiration(TimeStamp::NowLoRes(),
+                         StaticPrefs::network_dnsCacheExpiration(),
+                         StaticPrefs::network_dnsCacheExpirationGracePeriod());
+  addrRec->negative = false;
+  addrRec->mLastUpdate = TimeStamp::NowLoRes();
+  *aRv = NS_OK;
+  return rec.forget();
+}
+
 already_AddRefed<nsHostRecord> nsHostResolver::InitMockHTTPSRecord(
     const nsHostKey& key) {
   MOZ_ASSERT(IS_OTHER_TYPE(key.type));
@@ -486,6 +510,46 @@ nsresult nsHostResolver::ResolveHost(const nsACString& aHost,
   }
 
   RefPtr<nsResolveHostCallback> callback(aCallback);
+
+  if (auto override = LookupHostOverride(host)) {
+    RefPtr<nsHostRecord> overrideResult;
+    nsresult overrideStatus = NS_OK;
+    if (IS_OTHER_TYPE(type)) {
+      LOG(("HostOverride suppress host=%s type=%u\n", host.get(), type));
+      overrideStatus = NS_ERROR_UNKNOWN_HOST;
+    } else {
+      NetAddr address;
+      if (NS_SUCCEEDED(address.InitFromString(override->mAddress)) &&
+          address.raw.family == AF_INET &&
+          (af == PR_AF_UNSPEC || af == PR_AF_INET) &&
+          !(flags & nsIDNSService::RESOLVE_DISABLE_IPV4)) {
+        nsAutoCString originSuffix;
+        aOriginAttributes.CreateSuffix(originSuffix);
+        nsHostKey key(host, aTrrServer, type, flags, af,
+                      aOriginAttributes.IsPrivateBrowsing(), originSuffix);
+        nsresult initRv;
+        overrideResult = InitHostOverrideRecord(key, address, &initRv);
+        if (NS_SUCCEEDED(initRv)) {
+          LOG(("HostOverride synthetic host=%s address=%s\n", host.get(),
+               override->mAddress.get()));
+        } else {
+          overrideStatus = NS_ERROR_UNKNOWN_HOST;
+        }
+      } else {
+        overrideStatus = NS_ERROR_UNKNOWN_HOST;
+      }
+    }
+    {
+      MutexAutoLock dbLock(mDBLock);
+      MutexAutoLock queueLock(mQueue.mLock);
+      if (mShutdown) {
+        return NS_ERROR_NOT_INITIALIZED;
+      }
+    }
+    callback->OnResolveHostComplete(this, overrideResult, overrideStatus);
+    return NS_OK;
+  }
+
   // if result is set inside the lock, then we need to issue the
   // callback before returning.
   RefPtr<nsHostRecord> result;

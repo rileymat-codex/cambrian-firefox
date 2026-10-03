@@ -65,6 +65,7 @@
 #include "mozilla/net/ChannelClassifierUtils.h"
 #include "mozilla/net/CookieJarSettings.h"
 #include "mozilla/net/CookieServiceParent.h"
+#include "mozilla/net/HostOverride.h"
 #include "mozilla/net/NeckoChannelParams.h"
 #include "mozilla/net/NoVarySearchUtils.h"
 #include "mozilla/net/OpaqueResponseUtils.h"
@@ -1718,6 +1719,10 @@ void nsHttpChannel::SpeculativeConnect() {
   }
 
   if (LoadAllowStaleCacheContent()) {
+    return;
+  }
+
+  if (LookupHostOverride(mConnectionInfo->GetOrigin())) {
     return;
   }
 
@@ -8109,6 +8114,20 @@ nsresult nsHttpChannel::BeginConnect() {
   nsCOMPtr<nsProxyInfo> proxyInfo;
   if (mProxyInfo) proxyInfo = do_QueryInterface(mProxyInfo);
 
+  const bool hostOverride = LookupHostOverride(host).isSome();
+  if (hostOverride && proxyInfo && !proxyInfo->IsDirect()) {
+    LOG(("nsHttpChannel::BeginConnect refusing overridden proxied host %s\n",
+         host.get()));
+    return NS_ERROR_FAILURE;
+  }
+  if (hostOverride && mWebTransportSessionEventListener) {
+    return NS_ERROR_FAILURE;
+  }
+  if (hostOverride) {
+    mCaps |= NS_HTTP_DISALLOW_HTTP3 | NS_HTTP_DISALLOW_HTTPS_RR;
+    StoreAllowHttp3(false);
+  }
+
   if (mCaps & NS_HTTP_CONNECT_ONLY) {
     if (!proxyInfo) {
       LOG(("return failure: no proxy for connect-only channel\n"));
@@ -8200,7 +8219,12 @@ nsresult nsHttpChannel::BeginConnect() {
   }
 
   RefPtr<AltSvcMapping> mapping;
-  if (!mConnectionInfo && LoadAllowAltSvc() &&  // per channel
+  if (hostOverride && mConnectionInfo &&
+      (mConnectionInfo->IsHttp3() ||
+       !mConnectionInfo->GetRoutedHost().IsEmpty())) {
+    return NS_ERROR_FAILURE;
+  }
+  if (!hostOverride && !mConnectionInfo && LoadAllowAltSvc() &&  // per channel
       !mWebTransportSessionEventListener && (http2Allowed || http3Allowed) &&
       !(mLoadFlags & LOAD_FRESH_CONNECTION) &&
       AltSvcMapping::AcceptableProxy(proxyInfo) &&
@@ -8277,7 +8301,8 @@ nsresult nsHttpChannel::BeginConnect() {
   bool trrEnabled = false;
   auto dnsStrategy = ComputeProxyDNSStrategy();
   bool httpsRRAllowed =
-      !LoadBeConservative() && !(mCaps & NS_HTTP_BE_CONSERVATIVE) &&
+      !hostOverride && !LoadBeConservative() &&
+      !(mCaps & NS_HTTP_BE_CONSERVATIVE) &&
       !(mLoadInfo->TriggeringPrincipal()->IsSystemPrincipal() &&
         mLoadInfo->GetExternalContentPolicyType() !=
             ExtContentPolicy::TYPE_DOCUMENT) &&
@@ -8484,6 +8509,12 @@ void nsHttpChannel::MaybeStartDNSPrefetch() {
   }
   if ((mLoadFlags & (LOAD_NO_NETWORK_IO | LOAD_ONLY_FROM_CACHE)) ||
       LoadAuthRedirectedChannel()) {
+    return;
+  }
+
+  nsAutoCString prefetchHost;
+  if (NS_SUCCEEDED(mURI->GetAsciiHost(prefetchHost)) &&
+      LookupHostOverride(prefetchHost)) {
     return;
   }
 

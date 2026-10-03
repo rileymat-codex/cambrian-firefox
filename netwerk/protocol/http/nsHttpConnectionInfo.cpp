@@ -13,6 +13,7 @@
 
 #include "mozilla/HashFunctions.h"
 #include "mozilla/net/DNS.h"
+#include "mozilla/net/HostOverride.h"
 #include "mozilla/net/NeckoChannelParams.h"
 #include "nsComponentManagerUtils.h"
 #include "nsHttpConnectionInfo.h"
@@ -292,6 +293,12 @@ void nsHttpConnectionInfo::BuildHashKey() {
   nsAutoCString originAttributes;
   mOriginAttributes.CreateSuffix(originAttributes);
   mHashKey.Append(originAttributes);
+
+  if (auto override = LookupHostOverride(mOrigin)) {
+    mHashKey.AppendLiteral("[HOST-OVERRIDE:");
+    mHashKey.Append(override->mAddress);
+    mHashKey.Append(override->mInsecure ? ":insecure]" : "]");
+  }
 }
 
 void nsHttpConnectionInfo::RebuildHashKey() {

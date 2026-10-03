@@ -694,6 +694,8 @@ skip-if = [
 
 ["test_dns_override.js"]
 
+["test_host_overrides_pref.js"]
+
 ["test_dns_override_for_localhost.js"]
 
 ["test_dns_proxy_bypass.js"]

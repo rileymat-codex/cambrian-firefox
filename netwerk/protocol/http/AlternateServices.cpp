@@ -15,6 +15,7 @@
 #include "mozilla/glean/NetwerkProtocolHttpMetrics.h"
 #include "mozilla/net/AltSvcTransactionChild.h"
 #include "mozilla/net/AltSvcTransactionParent.h"
+#include "mozilla/net/HostOverride.h"
 #include "nsEscape.h"
 #include "nsHttpConnectionInfo.h"
 #include "nsHttpHandler.h"
@@ -66,6 +67,11 @@ void AltSvcMapping::ProcessHeader(
     nsProxyInfo* proxyInfo, uint32_t caps,
     const OriginAttributes& originAttributes,
     nsHttpConnectionInfo* aTransConnInfo, bool aDontValidate /* = false */) {
+  if (LookupHostOverride(originHost)) {
+    LOG(("AltSvcMapping::ProcessHeader suppressed for overridden host %s\n",
+         originHost.get()));
+    return;
+  }
   LOG(("AltSvcMapping::ProcessHeader: %s\n", buf.get()));
   // In tests, this might be called off the main thread. If so, dispatch it
   // synchronously to the main thread.

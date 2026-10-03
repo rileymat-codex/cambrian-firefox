@@ -15527,6 +15527,11 @@
   value: false
   mirror: always
 
+- name: network.host_overrides
+  type: DataMutexString
+  value: ""
+  mirror: always
+
 - name: network.dns.disablePrefetchFromHTTPS
   type: bool
   value: false

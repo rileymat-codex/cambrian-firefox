@@ -133,6 +133,9 @@ class nsHostResolver : public nsISupports, public AHostResolver {
    */
   already_AddRefed<nsHostRecord> InitLoopbackRecord(const nsHostKey& key,
                                                     nsresult* aRv);
+  already_AddRefed<nsHostRecord> InitHostOverrideRecord(
+      const nsHostKey& key, const mozilla::net::NetAddr& aAddress,
+      nsresult* aRv);
 
   /**
    * return a mock HTTPS record

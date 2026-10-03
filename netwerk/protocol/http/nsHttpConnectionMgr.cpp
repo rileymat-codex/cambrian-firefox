@@ -27,6 +27,7 @@
 #include "mozilla/glean/NetwerkProtocolHttpMetrics.h"
 #include "mozilla/net/DNS.h"
 #include "mozilla/net/DashboardTypes.h"
+#include "mozilla/net/HostOverride.h"
 #include "nsCOMPtr.h"
 #include "nsHttpConnectionMgr.h"
 #include "nsHttpHandler.h"
@@ -761,6 +762,9 @@ HttpConnectionBase* nsHttpConnectionMgr::FindCoalescableConnectionByHashKey(
   MOZ_ASSERT(OnSocketThread(), "not on socket thread");
   MOZ_ASSERT(!aNoHttp2 || !aNoHttp3);
   MOZ_ASSERT(ent->mConnInfo);
+  if (HasHostOverrides()) {
+    return nullptr;
+  }
   nsHttpConnectionInfo* ci = ent->mConnInfo;
 
   nsTArray<CoalescedConnection>* listOfWeakConns =

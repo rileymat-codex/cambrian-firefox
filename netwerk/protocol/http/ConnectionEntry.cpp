@@ -14,6 +14,7 @@
 #include "ConnectionEntry.h"
 #include "HttpConnectionUDP.h"
 #include "mozilla/StaticPrefs_network.h"
+#include "mozilla/net/HostOverride.h"
 #include "mozilla/net/neqo_glue_ffi_generated.h"
 #include "nsHttpConnectionMgr.h"
 #include "nsHttpHandler.h"
@@ -1033,6 +1034,9 @@ void ConnectionEntry::MaybeUpdateEchConfig(nsHttpConnectionInfo* aConnInfo) {
 
 bool ConnectionEntry::MaybeProcessCoalescingKeys(nsIDNSAddrRecord* dnsRecord,
                                                  bool aIsHttp3) {
+  if (HasHostOverrides()) {
+    return false;
+  }
   if (!dnsRecord) {
     return false;
   }
