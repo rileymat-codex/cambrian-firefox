@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+app="$root/app/firefox"
+if [[ ! -x "$app" ]]; then
+  printf 'CambrianFirefox: missing executable: %s\n' "$app" >&2
+  exit 127
+fi
+for arg in "$@"; do
+  lower_arg=${arg,,}
+  if [[ "$lower_arg" == -private-window* || "$lower_arg" == --private-window* ]]; then
+    continue
+  fi
+  case "$lower_arg" in
+    -p|-p=*|-p*|--p|--p=*|-profile|-profile=*|--profile|--profile=*|-profilemanager|--profilemanager)
+      printf 'CambrianFirefox: profile selection is managed by the portable launcher; refusing %q\n' "$arg" >&2
+      exit 2
+      ;;
+  esac
+done
+profile_root=${XDG_STATE_HOME:-${HOME:?HOME must be set}/.local/state}/cambrian-firefox/profile
+umask 077
+mkdir -p "$profile_root"
+chmod 700 "$profile_root"
+exec "$app" --no-remote --profile "$profile_root" "$@"
