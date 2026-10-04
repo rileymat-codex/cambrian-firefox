@@ -22,6 +22,9 @@ equivalent packages.
 
 ## Host override prototype
 
+For the reasons behind this fork, a map of the implementation, and the commits
+that introduced each part, start with [fork changes](docs/fork-changes.md).
+
 In `about:config`, set the string preference `network.host_overrides`:
 
 ```text
